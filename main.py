@@ -14,8 +14,6 @@ reply_keyboard = [['/start']]
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
 
 
-#async def echo(update, context):
-    #await update.message.reply_text(f"введите /start", reply_markup=markup)
 
 
 async def start(update, context):
@@ -34,7 +32,7 @@ async def help(update, context):
 
 async def twoquest(update, context):
     spisok.append(update.message.text)
-    await update.message.reply_text(f'Записал. {spisok}')
+    await update.message.reply_text(f'Записал. {spisok[0]}')
 
 
 def main():
@@ -50,10 +48,10 @@ def main():
     # После регистрации обработчика в приложении
     # эта асинхронная функция будет вызываться при получении сообщения
     # с типом "текст", т. е. текстовых сообщений.
-    #text_handler = MessageHandler(filters.TEXT, echo)
+    text_handler = MessageHandler(filters.TEXT, twoquest)
 
     # Регистрируем обработчик в приложении.
-    #application.add_handler(text_handler)
+    application.add_handler(text_handler)
 
     # Запускаем приложение.
     application.run_polling()
