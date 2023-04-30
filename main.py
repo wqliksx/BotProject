@@ -5,6 +5,8 @@ from config import BOT_TOKEN
 from data import db_session
 from data.users import User
 from fpdf import FPDF
+import sys
+import requests
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG, filename='bot.log'
@@ -23,12 +25,15 @@ markup_t = ReplyKeyboardMarkup(third_stage_keyboard, one_time_keyboard=True)
 fourth_stage_keyboard = [['Постоянный'], ['Плывучий'], ['Свободный']]
 tim = ['Постоянный', 'Плывучий', 'Свободный']
 markup_f = ReplyKeyboardMarkup(fourth_stage_keyboard, one_time_keyboard=True)
-companys = [[['Яндекс, в ней вы сможете набраться опыта и познакомится с работой программиста.'],
-             ['Сбербанк, тут вы сможете полностью показать себя.']],
-            [['Kikcha, тут вы сможете набраться опыта и познакомиться с работой повара.'],
-             ['Ресторан Калмыцкая кухня, тут вы сможете работать в професиональной среде.']],
-            [['Государственный театр танца Калмыкии «Ойраты», тут вы сможете познакомиться с работай актёра'],
-             ['РЕСПУБЛИКАНСКИЙ РУССКИЙ ТЕАТР ДРАМЫ и КОМЕДИИ РЕСПУБЛИКИ КАЛМЫКИЯ, тут вы сможете показать всего себя']]]
+companys = [['Яндекс, в ней вы сможете набраться опыта и познакомится с работой программиста.',
+             'Сбербанк, тут вы сможете полностью показать себя.'],
+            ['Kikcha, тут вы сможете набраться опыта и познакомиться с работой повара.',
+             'Ресторан Калмыцкая кухня, тут вы сможете работать в професиональной среде.'],
+            ['Государственный театр танца Калмыкии «Ойраты», тут вы сможете познакомиться с работай актёра.',
+             'РЕСПУБЛИКАНСКИЙ РУССКИЙ ТЕАТР ДРАМЫ и КОМЕДИИ РЕСПУБЛИКИ КАЛМЫКИЯ, тут вы сможете показать всего себя.']]
+companys_data = [['улица А.С. Пушкина, 11 Элиста', 'улица Ленина 305 Элиста'],
+             ['улица Джангара, 36 Элиста', '6 мкр 14 Элиста'],
+             ['ул Ленина 201А Элиста', 'ул Горького 23 Элиста']]
 data_user = dict()
 
 
@@ -62,6 +67,52 @@ def test(number):
     return True
 
 
+def get_request_result(data):
+    geocoder_request = f"https://geocode-maps.yandex.ru/" \
+                       f"1.x/" \
+                       f"?apikey=40d1649f-0493-4b70-98ba-98533de7710b" \
+                       f"&geocode={data}&format=json"
+    resp = requests.get(geocoder_request)
+
+    if resp.ok:
+        json_resp = resp.json()
+        try:
+            toponym = json_resp['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']
+        except (KeyError, IndexError):
+            raise ValueError("Ничего не найдено")
+        else:
+            toponym_address = toponym["metaDataProperty"]["GeocoderMetaData"]["text"]
+            toponym_coordinates = toponym['Point']['pos']
+            return toponym_address, toponym_coordinates
+    else:
+        raise ValueError(f"Произошла ошибка\n"
+                         f"{geocoder_request}\n"
+                         f"Http status {resp.status_code}\n"
+                         f"{resp.reason}")
+
+
+def coord_disp(job, exp):
+    _, back_map_coord = get_request_result('Элиста')
+    # stadiums_coordinates = [get_request_result(i)[1] for i in user_data]
+    stadiums_coordinates = [get_request_result(companys_data[job][exp])[1]]
+    mark_type = 'pm2' + 'org' + 'l'
+    stadiums_coordinates_map = '~'.join(','.join(i.split()) + f',{mark_type}'
+                                        for i in stadiums_coordinates)
+    map_request = f"http://static-maps.yandex.ru/1.x/" \
+                  f"?ll={','.join(back_map_coord.split())}&z=13&l=sat&pt={stadiums_coordinates_map}"
+    response = requests.get(map_request)
+
+    if not response:
+        print("Ошибка выполнения запроса:")
+        print(map_request)
+        print("Http статус:", response.status_code, "(", response.reason, ")")
+        sys.exit(1)
+
+    map_file = "map.png"
+    with open(map_file, "wb") as file:
+        file.write(response.content)
+
+
 async def help(update, context):
     await update.message.reply_text("Чтобы начать нажмите /start", reply_markup=markup)
 
@@ -73,8 +124,7 @@ async def stop(update, context):
 
 async def make_rezume(update, context):
     db_sess = db_session.create_session()
-    idd = update.effective_chat.id
-    for us in db_sess.query(User).filter(User.id == idd):
+    for us in db_sess.query(User).filter(User.id == update.effective_chat.id):
         if us.name:
             pdf = FPDF()
             pdf.add_page()
@@ -86,8 +136,9 @@ async def make_rezume(update, context):
                     f'В браке: {"Да" if us.marry else "Нет"}']
             for i in text:
                 pdf.cell(0, 10, txt=i, ln=10, align='C' if text.index(i) == 0 else 'L')
-            pdf.output("simple_demo.pdf")
-            doc = open("simple_demo.pdf", 'rb')
+            pdf.output("rezume.pdf")
+            doc = open("rezume.pdf", 'rb')
+            await context.bot.send_document(chat_id=us.id, document='map.png')
             await context.bot.send_document(chat_id=us.id, document=doc)
             return
     await update.message.reply_text(f'Вы ещё не прошли тест для создания резюме.'
@@ -118,7 +169,8 @@ async def alt_first_stage(update, context):
         await update.message.reply_text('Чтож, тогда какова ваша специальность?', reply_markup=markup_s)
         return 2.5
     else:
-        await update.message.reply_text('Всего доброго!') #
+        await update.message.reply_text('Всего доброго!')
+        return ConversationHandler.END
 
 
 async def first_stage(update, context):
@@ -207,9 +259,13 @@ async def alt_fin_stage(update, context):
     user.years_old = data_user['years_old']
     user.exp = data_user['exp']
     db_sess.commit()
-    await update.message.reply_text(
-        'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
-        'ответы то напишите /start', reply_markup=fin_stage_markup)
+    for us in db_sess.query(User).filter(User.id == update.effective_chat.id):
+        if us.name:
+            coord_disp(us.job, us.exp)
+            await update.message.reply_text(f'Мы считаем что вам больше всего подойдёт эта компания! '
+                                            f'{companys[us.job][us.exp]} '
+                                            'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
+                                            'ответы то напишите /start')
     return ConversationHandler.END
 
 
@@ -227,9 +283,14 @@ async def fin_stage(update, context):
     user.exp = data_user['exp']
     db_sess.add(user)
     db_sess.commit()
-    await update.message.reply_text(
-        'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
-        'ответы то напишите /start', reply_markup=fin_stage_markup)
+    db_sess = db_session.create_session()
+    for us in db_sess.query(User).filter(User.id == update.effective_chat.id):
+        if us.name:
+            coord_disp(us.job, us.exp)
+            await update.message.reply_text(f'Мы считаем что вам больше всего подойдёт эта компания! '
+                                            f'{companys[us.job][us.exp]} '
+            'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
+            'ответы то напишите /start')
     return ConversationHandler.END
 
 
