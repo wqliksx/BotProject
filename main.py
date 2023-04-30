@@ -16,10 +16,12 @@ markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 fin_stage_keyboard = [['/make_rezume'], ['/start']]
 fin_stage_markup = ReplyKeyboardMarkup(fin_stage_keyboard, one_time_keyboard=True)
 second_stage_keyboard = [['Программист'], ['Повар'], ['Актёр']]
+jobs = ['Программист', 'Повар', 'Актёр']
 markup_s = ReplyKeyboardMarkup(second_stage_keyboard, one_time_keyboard=True)
 third_stage_keyboard = [['Нет'], ['Да']]
 markup_t = ReplyKeyboardMarkup(third_stage_keyboard, one_time_keyboard=True)
 fourth_stage_keyboard = [['Постоянный'], ['Плывучий'], ['Свободный']]
+tim = ['Постоянный', 'Плывучий', 'Свободный']
 markup_f = ReplyKeyboardMarkup(fourth_stage_keyboard, one_time_keyboard=True)
 companys = [[['Яндекс, в ней вы сможете набраться опыта и познакомится с работой программиста.'],
              ['Сбербанк, тут вы сможете полностью показать себя.']],
@@ -77,10 +79,16 @@ async def make_rezume(update, context):
             pdf = FPDF()
             pdf.add_page()
             pdf.add_font('DejaVu', '', 'DefaVu/DejaVuSansCondensed.ttf', uni=True)
-            pdf.set_font('DejaVu', '', 16)
-            pdf.cell(200, 10, txt=f"{us.name}", align="C") #L C R
-            pdf.cell(200, 10, txt='dsa', align='')
+            pdf.set_font('DejaVu', '', 18)
+            text = [us.name, f'Возраст: {us.years_old}', f'Специальность: {jobs[us.job]}, '
+                                                         f'{"опыт работы имеется" if us.exp else "опыта работы нет"}',
+                    f'График работы: {tim[us.time_job]}', f'Способ связи: {us.number_phone}',
+                    f'В браке: {"Да" if us.marry else "Нет"}']
+            for i in text:
+                pdf.cell(0, 10, txt=i, ln=10, align='C' if text.index(i) == 0 else 'L')
             pdf.output("simple_demo.pdf")
+            doc = open("simple_demo.pdf", 'rb')
+            await context.bot.send_document(chat_id=us.id, document=doc)
             return
     await update.message.reply_text(f'Вы ещё не прошли тест для создания резюме.'
                                     f'Чтобы пройти тест напишите /start', reply_markup=markup)
@@ -164,8 +172,6 @@ async def alt_fourth_stage(update, context):
 async def fourth_stage(update, context):
     data_user['time_job'] = fourth_stage_keyboard.index([update.message.text])
     await update.message.reply_text('Сколько вам лет?')
-    #await update.message.reply_text('Мы считаем что вам идеально подходит эта компания.\nХотите ли вы чтобы мы вам '
-           #                         'сделали резюме для трудоустройства?', reply_markup=markup_t)
     return 5
 
 
@@ -193,8 +199,8 @@ async def fif_stage(update, context):
 
 async def alt_fin_stage(update, context):
     data_user['exp'] = third_stage_keyboard.index([update.message.text])
-    user = User()
     db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.id == update.effective_chat.id).first()
     user.job = data_user['job']
     user.marry = data_user['marry']
     user.time_job = data_user['time_job']
@@ -214,9 +220,9 @@ async def fin_stage(update, context):
     user.id = data_user['id']
     user.name = data_user['name']
     user.number_phone = data_user['number']
-    user.quest_1 = data_user['job']
-    user.quest_2 = data_user['marry']
-    user.quest_3 = data_user['time_job']
+    user.job = data_user['job']
+    user.marry = data_user['marry']
+    user.time_job = data_user['time_job']
     user.years_old = data_user['years_old']
     user.exp = data_user['exp']
     db_sess.add(user)
