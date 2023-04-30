@@ -5,6 +5,7 @@ from config import BOT_TOKEN
 from data import db_session
 from data.users import User
 from fpdf import FPDF
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG, filename='bot.log'
 )
@@ -12,13 +13,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 reply_keyboard = [['/start']]
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
-second_stage_keyboard = [['Программист'], ['Повар'], ['Певец']]
+fin_stage_keyboard = [['/make_rezume'], ['/start']]
+fin_stage_markup = ReplyKeyboardMarkup(fin_stage_keyboard, one_time_keyboard=True)
+second_stage_keyboard = [['Программист'], ['Повар'], ['Актёр']]
 markup_s = ReplyKeyboardMarkup(second_stage_keyboard, one_time_keyboard=True)
 third_stage_keyboard = [['Нет'], ['Да']]
 markup_t = ReplyKeyboardMarkup(third_stage_keyboard, one_time_keyboard=True)
-fourth_stage_keyboard = [['Постоянный'], ['Непостоянный'], ['Свободный']]
+fourth_stage_keyboard = [['Постоянный'], ['Плывучий'], ['Свободный']]
 markup_f = ReplyKeyboardMarkup(fourth_stage_keyboard, one_time_keyboard=True)
-companys = [[], [], []]
+companys = [[['Яндекс, в ней вы сможете набраться опыта и познакомится с работой программиста.'],
+             ['Сбербанк, тут вы сможете полностью показать себя.']],
+            [['Kikcha, тут вы сможете набраться опыта и познакомиться с работой повара.'],
+             ['Ресторан Калмыцкая кухня, тут вы сможете работать в професиональной среде.']],
+            [['Государственный театр танца Калмыкии «Ойраты», тут вы сможете познакомиться с работай актёра'],
+             ['РЕСПУБЛИКАНСКИЙ РУССКИЙ ТЕАТР ДРАМЫ и КОМЕДИИ РЕСПУБЛИКИ КАЛМЫКИЯ, тут вы сможете показать всего себя']]]
 data_user = dict()
 
 
@@ -68,12 +76,14 @@ async def make_rezume(update, context):
         if us.name:
             pdf = FPDF()
             pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            pdf.cell(200, 20, txt=f"{us.name}", ln=1, align="C")
+            pdf.add_font('DejaVu', '', 'DefaVu/DejaVuSansCondensed.ttf', uni=True)
+            pdf.set_font('DejaVu', '', 16)
+            pdf.cell(200, 10, txt=f"{us.name}", align="C") #L C R
+            pdf.cell(200, 10, txt='dsa', align='')
             pdf.output("simple_demo.pdf")
             return
-    print(1)
-
+    await update.message.reply_text(f'Вы ещё не прошли тест для создания резюме.'
+                                    f'Чтобы пройти тест напишите /start', reply_markup=markup)
 
 
 async def start(update, context):
@@ -147,35 +157,58 @@ async def third_stage(update, context):
 
 async def alt_fourth_stage(update, context):
     data_user['time_job'] = fourth_stage_keyboard.index([update.message.text])
-    await update.message.reply_text('Мы считаем что вам идеально подходит эта компания.\nХотите ли вы чтобы мы вам '
-                                    'сделали резюме для трудоустройства?', reply_markup=markup_t)
-    return 9.5
+    await update.message.reply_text('Сколько вам лет?')
+    return 5.5
 
 
 async def fourth_stage(update, context):
     data_user['time_job'] = fourth_stage_keyboard.index([update.message.text])
+    await update.message.reply_text('Сколько вам лет?')
+    #await update.message.reply_text('Мы считаем что вам идеально подходит эта компания.\nХотите ли вы чтобы мы вам '
+           #                         'сделали резюме для трудоустройства?', reply_markup=markup_t)
+    return 5
 
-    await update.message.reply_text('Мы считаем что вам идеально подходит эта компания.\nХотите ли вы чтобы мы вам '
-                                    'сделали резюме для трудоустройства?', reply_markup=markup_t)
-    return 9
+
+async def alt_fif_stage(update, context):
+    text = update.message.text
+    try:
+        data_user['years_old'] = abs(int(text))
+        await update.message.reply_text('Имеется ли у вас опыт работы по вайшей специальности?', reply_markup=markup_t)
+        return 9.5
+    except Exception:
+        await update.message.reply_text('Введите свой возраст в цифрах')
+        return 5.5
+
+
+async def fif_stage(update, context):
+    text = update.message.text
+    try:
+        data_user['years_old'] = abs(int(text))
+        await update.message.reply_text('Имеется ли у вас опыт работы по вайшей специальности?', reply_markup=markup_t)
+        return 9
+    except Exception:
+        await update.message.reply_text('Введите свой возраст в цифрах')
+        return 5
 
 
 async def alt_fin_stage(update, context):
+    data_user['exp'] = third_stage_keyboard.index([update.message.text])
     user = User()
     db_sess = db_session.create_session()
-    user.quest_1 = data_user['job']
-    user.quest_2 = data_user['marry']
-    user.quest_3 = data_user['time_job']
+    user.job = data_user['job']
+    user.marry = data_user['marry']
+    user.time_job = data_user['time_job']
+    user.years_old = data_user['years_old']
+    user.exp = data_user['exp']
     db_sess.commit()
-    if third_stage_keyboard.index([update.message.text]):
-        await update.message.reply_text('Если желаете именить ваши ответы то введите /start', reply_markup=markup)
-        return ConversationHandler.END
-    else:
-        await update.message.reply_text('Если желаете именить ваши ответы то введите /start', reply_markup=markup)
-        return ConversationHandler.END
+    await update.message.reply_text(
+        'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
+        'ответы то напишите /start', reply_markup=fin_stage_markup)
+    return ConversationHandler.END
 
 
 async def fin_stage(update, context):
+    data_user['exp'] = third_stage_keyboard.index([update.message.text])
     user = User()
     db_sess = db_session.create_session()
     user.id = data_user['id']
@@ -184,18 +217,18 @@ async def fin_stage(update, context):
     user.quest_1 = data_user['job']
     user.quest_2 = data_user['marry']
     user.quest_3 = data_user['time_job']
+    user.years_old = data_user['years_old']
+    user.exp = data_user['exp']
     db_sess.add(user)
     db_sess.commit()
-    if third_stage_keyboard.index([update.message.text]):
-        await update.message.reply_text('Если желаете именить ваши ответы то введите /start', reply_markup=markup)
-        return ConversationHandler.END
-    else:
-        await update.message.reply_text('Если желаете именить ваши ответы то введите /start', reply_markup=markup)
-        return ConversationHandler.END
+    await update.message.reply_text(
+        'Если захотите сделать резюме то напишите /make_rezume, а если желаете изменить '
+        'ответы то напишите /start', reply_markup=fin_stage_markup)
+    return ConversationHandler.END
 
 
 def main():
-    db_session.global_init("db/blogs.db")
+    db_session.global_init("db/database.db")
 
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("help", help))
@@ -212,6 +245,8 @@ def main():
             3.5: [MessageHandler(filters.TEXT & ~filters.COMMAND, alt_third_stage)],
             4: [MessageHandler(filters.TEXT & ~filters.COMMAND, fourth_stage)],
             4.5: [MessageHandler(filters.TEXT & ~filters.COMMAND, alt_fourth_stage)],
+            5: [MessageHandler(filters.TEXT & ~filters.COMMAND, fif_stage)],
+            5.5: [MessageHandler(filters.TEXT & ~filters.COMMAND, alt_fif_stage)],
             9: [MessageHandler(filters.TEXT & ~filters.COMMAND, fin_stage)],
             9.5: [MessageHandler(filters.TEXT & ~filters.COMMAND, alt_fin_stage)]
         },

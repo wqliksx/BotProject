@@ -1,15 +1,9 @@
-from flask import Flask
-from data import db_session
-from data.users import User
-import datetime
+from fpdf import FPDF
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'yandexlyceum_secret_key'
-
-
-def main():
-
-
-
-if __name__ == '__main__':
-    main()
+pdf = FPDF()
+pdf.add_page()
+pdf.add_font('DejaVu', '', 'DefaVu/DejaVuSansCondensed.ttf', uni=True)
+pdf.set_font('DejaVu', '', 16)
+pdf.cell(200, 10, txt="dddd", align="B")
+pdf.cell(200, 10, txt='dsa', align='')
+pdf.output("simple_demo.pdf")
